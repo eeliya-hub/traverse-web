@@ -31,8 +31,117 @@
 
   <title>traverse</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /*
+      Confine the web app to an iPhone 16e-sized phone frame.
+      iPhone 16e: 1170 x 2532 physical px at a 3.0 device pixel ratio
+      => 390 x 844 CSS (logical) pixels, the resolution the app sees.
+    */
+    :root {
+      --device-width: 390px;
+      --device-height: 844px;
+      --bezel: 14px;
+      --screen-radius: 47px;
+      /* Small gap above the app content (like a slim status-bar area). */
+      --safe-top: 16px;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 30%, #2a2a30 0%, #121215 70%);
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* The physical phone body / bezel. */
+    #phone-frame {
+      position: relative;
+      box-sizing: content-box;
+      width: var(--device-width);
+      height: var(--device-height);
+      padding: var(--bezel);
+      background: #0a0a0c;
+      border-radius: calc(var(--screen-radius) + var(--bezel));
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.6),
+        0 0 0 2px #2c2c30,
+        inset 0 0 2px 1px rgba(255, 255, 255, 0.08);
+      transform-origin: center center;
+    }
+
+    /* The actual screen — exactly the iPhone 16e logical resolution. */
+    #phone-screen {
+      position: relative;
+      width: var(--device-width);
+      height: var(--device-height);
+      border-radius: var(--screen-radius);
+      overflow: hidden;
+      /* Matches the app's light background so the top gap blends in. */
+      background: #ececec;
+    }
+
+    /*
+      The Flutter mount. It spans from the top gap down to the very bottom
+      edge, so Flutter measures and renders into exactly this area — the
+      app starts below the gap and its bottom reaches the screen's bottom.
+    */
+    #app-host {
+      position: absolute;
+      top: var(--safe-top);
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    /* Make the Flutter view fill the host element. */
+    #app-host flutter-view,
+    #app-host flt-glass-pane {
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
 </head>
 <body>
+  <div id="phone-frame">
+    <div id="phone-screen">
+      <div id="app-host"></div>
+    </div>
+  </div>
+
+  <script>
+    // Scale the whole frame down so it always fits inside the browser
+    // window, without changing the resolution the app renders at.
+    (function () {
+      function fitFrame() {
+        var frame = document.getElementById('phone-frame');
+        if (!frame) return;
+        var margin = 32;
+        var availW = window.innerWidth - margin;
+        var availH = window.innerHeight - margin;
+        var scale = Math.min(
+          availW / frame.offsetWidth,
+          availH / frame.offsetHeight,
+          1
+        );
+        // Only apply a transform when we actually need to shrink. A CSS
+        // transform on an ancestor of the Flutter host can blank CanvasKit
+        // rendering, so at full size we leave it untransformed.
+        frame.style.transform = scale < 0.999 ? 'scale(' + scale + ')' : 'none';
+      }
+      window.addEventListener('resize', fitFrame);
+      window.addEventListener('load', fitFrame);
+      fitFrame();
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

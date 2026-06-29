@@ -37,6 +37,11 @@ if (!window._flutter) {
 _flutter.buildConfig = {"engineRevision":"d3d45dcf251823c1769909cd43698d126db38deb","builds":[{"compileTarget":"dart2js","renderer":"canvaskit","mainJsPath":"main.dart.js"},{}]};
 
 _flutter.loader.load({
+  config: {
+    // Mount the app inside the phone frame (below the top gap) instead of
+    // the whole page.
+    hostElement: document.getElementById("app-host")
+  },
   serviceWorkerSettings: {
     serviceWorkerVersion: "2771983904"
   }
