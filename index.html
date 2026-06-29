@@ -108,6 +108,22 @@
       height: 100% !important;
     }
   </style>
+
+  <script>
+    // Force preserveDrawingBuffer on WebGL so we can read back the rendered
+    // frame to colour-match the top gap (see the sampler script below).
+    // Must run before Flutter creates its WebGL/CanvasKit context.
+    (function () {
+      var orig = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+        if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
+          attrs = attrs || {};
+          attrs.preserveDrawingBuffer = true;
+        }
+        return orig.call(this, type, attrs);
+      };
+    })();
+  </script>
 </head>
 <body>
   <div id="phone-frame">
@@ -139,6 +155,59 @@
       window.addEventListener('resize', fitFrame);
       window.addEventListener('load', fitFrame);
       fitFrame();
+    })();
+  </script>
+
+  <script>
+    // Blend the top gap with the app: sample the colour at the very top of
+    // the rendered app and paint the screen background to match. This way the
+    // gap follows whatever is at the top (green app bar, light page bg, ...)
+    // instead of being an obvious fixed-colour strip.
+    (function () {
+      var screen = document.getElementById('phone-screen');
+      var sampler = document.createElement('canvas');
+      sampler.width = 1;
+      sampler.height = 1;
+      var sctx = sampler.getContext('2d', { willReadFrequently: true });
+
+      // Collect canvases, descending through shadow roots — Flutter's
+      // CanvasKit canvas lives inside the flt-glass-pane shadow DOM, which a
+      // plain querySelectorAll won't reach.
+      function collectCanvases(root, out) {
+        var cs = root.querySelectorAll('canvas');
+        for (var i = 0; i < cs.length; i++) out.push(cs[i]);
+        var els = root.querySelectorAll('*');
+        for (var j = 0; j < els.length; j++) {
+          if (els[j].shadowRoot) collectCanvases(els[j].shadowRoot, out);
+        }
+      }
+
+      function biggestCanvas(host) {
+        var out = [];
+        collectCanvases(host, out);
+        var best = null, area = 0;
+        for (var i = 0; i < out.length; i++) {
+          var a = out[i].width * out[i].height;
+          if (a > area) { area = a; best = out[i]; }
+        }
+        return best;
+      }
+
+      function tick() {
+        var host = document.getElementById('app-host');
+        var cv = host && biggestCanvas(host);
+        if (cv && cv.width > 1 && cv.height > 1) {
+          try {
+            // One pixel, centred, a few device-px below the very top edge.
+            sctx.drawImage(cv, (cv.width / 2) | 0, 6, 1, 1, 0, 0, 1, 1);
+            var d = sctx.getImageData(0, 0, 1, 1).data;
+            if (d[3] > 0) {
+              screen.style.background = 'rgb(' + d[0] + ',' + d[1] + ',' + d[2] + ')';
+            }
+          } catch (e) { /* keep last colour */ }
+        }
+      }
+      setInterval(tick, 150);
     })();
   </script>
 
