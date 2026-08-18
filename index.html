@@ -18,6 +18,15 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!--
+    Without this, a phone browser lays the page out in a 980px-wide imaginary
+    window and then zooms the result out to fit. Every width-based media query
+    below would be answered against 980px and never match, and the app would be
+    rendered at desktop size and shrunk rather than laid out for the device.
+    viewport-fit=cover so the full-screen phone case reaches the display edges.
+  -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="A new Flutter project.">
 
   <!-- iOS meta tags & icons -->
@@ -31,6 +40,47 @@
 
   <title>traverse</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    /*
+      Is this a phone, or something big enough to show a phone on?
+
+      The frame is a presentation device: on a desktop or an iPad it shows the
+      app the shape it was designed for. On an actual phone it is absurd — a
+      phone drawn inside a phone, with the real app shrunk to fit the picture.
+      So below a certain size the frame comes off and the app just fills the
+      screen, which is what it was built to do anyway.
+
+      Two clauses, because a phone turned sideways is wide but short:
+        max-width 600px   every phone in portrait (the widest is ~440px),
+                          while an iPad mini is 744px and stays framed
+        max-height 599px  the same phones in landscape (~390-440px tall),
+                          limited to touch devices so a short desktop window
+                          keeps its frame
+
+      Stamped on <html> from here, before anything paints, so there is no
+      flash of a frame that is about to be removed. The CSS below and
+      fitFrame() at the end of the body both read this one query — if they
+      disagreed, the app would end up full-screen AND scaled down to fit a
+      frame that isn't there.
+    */
+    window.TRAVERSE_PHONE_MQ = window.matchMedia(
+      '(max-width: 600px), (max-height: 599px) and (pointer: coarse)');
+
+    (function () {
+      function applyViewport() {
+        document.documentElement.setAttribute(
+          'data-viewport', window.TRAVERSE_PHONE_MQ.matches ? 'phone' : 'framed');
+      }
+      applyViewport();
+      // Rotating a phone crosses the boundary in both directions.
+      if (window.TRAVERSE_PHONE_MQ.addEventListener) {
+        window.TRAVERSE_PHONE_MQ.addEventListener('change', applyViewport);
+      } else {
+        window.TRAVERSE_PHONE_MQ.addListener(applyViewport);
+      }
+    })();
+  </script>
 
   <style>
     /*
@@ -107,6 +157,42 @@
       width: 100% !important;
       height: 100% !important;
     }
+
+    /*
+      On a phone there is no frame — the browser window already is one. Every
+      decoration is stripped rather than hidden, so the app measures and
+      renders at the device's own resolution instead of a fixed 390x844.
+    */
+    html[data-viewport="phone"],
+    html[data-viewport="phone"] body {
+      background: #ececec;
+    }
+
+    html[data-viewport="phone"] #phone-frame {
+      width: 100%;
+      height: 100%;
+      /* dvh, so the frame does not sit under the browser chrome that appears
+         and disappears as you scroll on iOS and Android. */
+      height: 100dvh;
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+      /* fitFrame() leaves this alone here, but a stale transform from a resize
+         across the boundary would silently shrink the whole app. */
+      transform: none !important;
+    }
+
+    html[data-viewport="phone"] #phone-screen {
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+    }
+
+    /* No fake status-bar gap: the real one belongs to the real device. */
+    html[data-viewport="phone"] #app-host {
+      top: 0;
+    }
   </style>
 
   <script>
@@ -139,6 +225,14 @@
       function fitFrame() {
         var frame = document.getElementById('phone-frame');
         if (!frame) return;
+
+        // No frame on a phone, so nothing to fit it into. Scaling here would
+        // shrink a full-screen app to 100% of itself minus the margin below.
+        if (window.TRAVERSE_PHONE_MQ && window.TRAVERSE_PHONE_MQ.matches) {
+          frame.style.transform = 'none';
+          return;
+        }
+
         var margin = 32;
         var availW = window.innerWidth - margin;
         var availH = window.innerHeight - margin;
@@ -153,7 +247,11 @@
         frame.style.transform = scale < 0.999 ? 'scale(' + scale + ')' : 'none';
       }
       window.addEventListener('resize', fitFrame);
+      window.addEventListener('orientationchange', fitFrame);
       window.addEventListener('load', fitFrame);
+      if (window.TRAVERSE_PHONE_MQ && window.TRAVERSE_PHONE_MQ.addEventListener) {
+        window.TRAVERSE_PHONE_MQ.addEventListener('change', fitFrame);
+      }
       fitFrame();
     })();
   </script>
